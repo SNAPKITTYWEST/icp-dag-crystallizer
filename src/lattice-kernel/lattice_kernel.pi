@@ -1,0 +1,311 @@
+% SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+% CLONE_GATE: lattice_kernel_picat
+%
+% lattice_kernel.pi — Relational Lattice Kernel (Picat)
+%
+% Functional-logic port of the mu_kanren / Prolog relational kernel.
+% Picat combines logic programming (backtracking, unification, tabling)
+% with functional programming and constraint solving (cp, sat, smt modules).
+%
+% Run: picat lattice_kernel.pi
+%
+% Sections:
+%   1. List relations (logic mode)
+%   2. Peano arithmetic (logic + tabled)
+%   3. Full adder (logic + cp)
+%   4. Relational interpreter (evalo stub)
+%   5. SMT stub
+%   6. EDB / path / reachability
+%   7. FSM relations
+%   8. Refinement lattice
+%   9. Demo / smoke tests
+
+import cp.
+
+% ============================================================
+% 1. LIST RELATIONS
+% ============================================================
+
+index (+, -, -)  % conso(A,D,P)
+conso(A, D, P) => P = [A|D].
+
+index (+)
+nullo(X) => X = [].
+
+listo([]).
+listo([_|D]) => listo(D).
+
+appendo([], S, S).
+appendo([A|D], S, [A|R]) => appendo(D, S, R).
+
+membero(X, [X|_]).
+membero(X, [_|T]) => membero(X, T).
+
+rembero(_, [], []).
+rembero(X, [X|D], D) => true.
+rembero(X, [A|D], [A|R]) =>
+    X != A,
+    rembero(X, D, R).
+
+reverseo(L, O) => rev_acco(L, [], O).
+
+rev_acco([], Acc, Acc).
+rev_acco([A|D], Acc, O) => rev_acco(D, [A|Acc], O).
+
+lengtho([], 0).
+lengtho([_|D], N) =>
+    lengtho(D, N1),
+    N = N1 + 1.
+
+distincto([]).
+distincto([A|D]) =>
+    not membero(A, D),
+    distincto(D).
+
+% ============================================================
+% 2. PEANO ARITHMETIC (tabled for termination)
+% ============================================================
+
+:- table addo/3.
+addo(z, Y, Y).
+addo(s(X), Y, s(Z)) => addo(X, Y, Z).
+
+:- table mulo/3.
+mulo(z, _, z).
+mulo(s(X), Y, Z) =>
+    mulo(X, Y, Z1),
+    addo(Y, Z1, Z).
+
+:- table leq_nato/2.
+leq_nato(z, _).
+leq_nato(s(X), s(Y)) => leq_nato(X, Y).
+
+% ============================================================
+% 3. FULL ADDER
+% ============================================================
+
+% Logic mode: enumerate all solutions
+bit(0). bit(1).
+
+half_addo(0, 0, 0, 0).
+half_addo(0, 1, 1, 0).
+half_addo(1, 0, 1, 0).
+half_addo(1, 1, 0, 1).
+
+full_addo(A, B, Cin, S, Cout) =>
+    bit(A), bit(B), bit(Cin),
+    half_addo(A, B, W, C1),
+    half_addo(W, Cin, S, C2),
+    (C1 = 1 ; C2 = 1 -> Cout = 1 ; Cout = 0).
+
+% CP mode: constraint-based full adder
+full_addo_cp(A, B, Cin, S, Cout) =>
+    [A, B, Cin, S, Cout] :: 0..1,
+    S    #= (A + B + Cin) mod 2,
+    Cout #= (A + B + Cin) div 2.
+
+% n-bit ripple-carry adder
+addero([], [], [], Cin, Cin).
+addero([A|As], [B|Bs], [S|Ss], Cin, Cout) =>
+    full_addo(A, B, Cin, S, Cmid),
+    addero(As, Bs, Ss, Cmid, Cout).
+
+% ============================================================
+% 4. RELATIONAL INTERPRETER (evalo stub)
+% ============================================================
+
+% Simplified evalo: handles quote, variable lookup, lambda, application
+lookupo(X, [[X,V]|_], V).
+lookupo(X, [[Y,_]|Rest], V) =>
+    X != Y,
+    lookupo(X, Rest, V).
+
+eval_expro(quote(Q), _, Q).
+eval_expro(X, Env, V), atom(X), X != quote, X != lambda =>
+    lookupo(X, Env, V).
+eval_expro(lambda(P,B), Env, closure(P,B,Env)).
+eval_expro(app(Rator, Rand), Env, V) =>
+    eval_expro(Rator, Env, Clo),
+    eval_expro(Rand, Env, Arg),
+    applyo(Clo, Arg, V).
+eval_expro(cons(A,D), Env, [VA|VD]) =>
+    eval_expro(A, Env, VA),
+    eval_expro(D, Env, VD).
+eval_expro(if(C,T,El), Env, V) =>
+    eval_expro(C, Env, CV),
+    (CV != false ->
+        eval_expro(T, Env, V)
+    ;
+        eval_expro(El, Env, V)
+    ).
+
+applyo(closure(P,B,Env), Arg, V) =>
+    eval_expro(B, [[P,Arg]|Env], V).
+
+evalo(Exp, Val) => eval_expro(Exp, [], Val).
+
+% ============================================================
+% 5. SMT STUB
+% ============================================================
+
+is_sat(true)       => true.
+is_sat(false)      => fail.
+is_sat(and(A, B))  =>
+    not (A = not(P), B = P),
+    not (B = not(P), A = P),
+    is_sat(A), is_sat(B).
+is_sat(or(A, _B))  => is_sat(A).
+is_sat(or(_A, B))  => is_sat(B).
+is_sat(not(false)) => true.
+is_sat(not(true))  => fail.
+is_sat(not(_))     => true.   % open-world: unknown atoms are satisfiable
+is_sat(var(_))     => true.
+is_sat(_)          => true.   % any other term: assume sat
+
+% ============================================================
+% 6. EDB / PATH / REACHABILITY
+% ============================================================
+
+:- dynamic edge/4.    % edge(RelId, Src, Tgt, Guard)
+:- dynamic edb3/3.    % edb3(Rel, A, B)
+:- dynamic edb4/4.    % edb4(Rel, A, B, C)
+
+assert_edge(R, X, Y, G) => assertz(edge(R,X,Y,G)).
+assert_edb3(Rel, A, B)  => assertz(edb3(Rel,A,B)).
+
+% Basic reachability
+reach(R, X, X) :- edge(R, X, _, _).
+reach(R, X, Y) :- edge(R, X, Y, _).
+reach(R, X, Z) :- reach(R, X, Y), edge(R, Y, Z, _).
+
+% Guarded reachability
+sat_reach(R, X, Y) :- edge(R, X, Y, G), is_sat(G).
+sat_reach(R, X, Z) :- sat_reach(R, X, Y), edge(R, Y, Z, G), is_sat(G).
+
+% Path with accumulated formula
+path_formula(R, X, Y, G) :-
+    edge(R, X, Y, G), is_sat(G).
+path_formula(R, X, Z, and(E, Phi2)) :-
+    edge(R, X, Y, E), is_sat(E),
+    path_formula(R, Y, Z, Phi2),
+    is_sat(and(E, Phi2)).
+
+% General reachability
+reacho(_, S, S).
+reacho(Rel, S, T) :-
+    edb3(Rel, S, M),
+    reacho(Rel, M, T).
+
+% ============================================================
+% 7. FSM RELATIONS
+% ============================================================
+
+:- dynamic fsm_trans/5.   % fsm_trans(Id, State, Input, NextState, Output)
+
+register_fsm(Id) =>
+    assertz(fsm_trans(Id, s0, 0, s0, 0)),
+    assertz(fsm_trans(Id, s0, 1, s1, 0)),
+    assertz(fsm_trans(Id, s1, 0, s0, 1)),
+    assertz(fsm_trans(Id, s1, 1, s1, 1)).
+
+fsmo(Id, St, Inp, Nst, Out) => fsm_trans(Id, St, Inp, Nst, Out).
+
+fsm_traceo(_, _, [], []).
+fsm_traceo(Id, S, [I|Rest], [O|RestO]) =>
+    fsmo(Id, S, I, S1, O),
+    fsm_traceo(Id, S1, Rest, RestO).
+
+% ============================================================
+% 8. REFINEMENT LATTICE
+% ============================================================
+
+refineo(conc(C), C).
+refineo(top, _).
+refineo(interval(Lo, Hi), N) =>
+    leq_nato(Lo, N),
+    leq_nato(N, Hi).
+
+% Numeric version for integer domains
+refines_nat(top, _).
+refines_nat(conc(C), C).
+refines_nat(interval(Lo, Hi), N) =>
+    integer(Lo), integer(Hi), integer(N),
+    Lo =< N, N =< Hi.
+
+% Widening: join two abstract values
+widen(conc(C), conc(C), conc(C)).
+widen(conc(C1), conc(C2), interval(C1, C2)) => C1 =< C2.
+widen(conc(C1), conc(C2), interval(C2, C1)) => C2 < C1.
+widen(interval(L1,H1), interval(L2,H2), interval(L,H)) =>
+    L = min(L1,L2), H = max(H1,H2).
+widen(_, top, top).
+widen(top, _, top).
+
+% ============================================================
+% 9. DEMO / SMOKE TESTS
+% ============================================================
+
+main =>
+    println("=== lattice_kernel.pi ==="),
+
+    % List tests
+    println("\nappendo([1,2],[3],?):"),
+    findall(Q, appendo([1,2],[3],Q), R1),
+    println(R1),
+
+    % Peano addition
+    println("addo(s(z), s(s(z)), ?):"),
+    findall(Q, addo(s(z), s(s(z)), Q), R2),
+    println(R2),
+
+    % Full adder
+    println("full_addo(1,1,0,S,C):"),
+    findall(S-C, full_addo(1,1,0,S,C), R3),
+    println(R3),
+
+    % CP full adder
+    println("full_addo_cp(1,1,0,S,C):"),
+    [Sa, Ca] :: 0..1,
+    full_addo_cp(1, 1, 0, Sa, Ca),
+    solve([Sa, Ca]),
+    println(Sa-Ca),
+
+    % evalo
+    println("evalo identity:"),
+    findall(V, evalo(app(lambda(x,x), quote(hello)), V), R4),
+    println(R4),
+
+    % SAT stub
+    println("is_sat(and(var(p), not(var(q)))):"),
+    ( is_sat(and(var(p), not(var(q)))) -> println(sat) ; println(unsat) ),
+    println("is_sat(and(var(p), not(var(p)))):"),
+    ( is_sat(and(var(p), not(var(p)))) -> println(sat) ; println(unsat) ),
+
+    % EDB + reachability
+    assert_edge(0, 0, 1, true),
+    assert_edge(0, 1, 2, true),
+    assert_edge(0, 2, 3, and(var(p), not(var(q)))),
+    assert_edb3(edge, 0, 1),
+    assert_edb3(edge, 1, 2),
+
+    println("sat_reach from 0:"),
+    findall(T, sat_reach(0, 0, T), R5),
+    sort(R5, R5s),
+    println(R5s),
+
+    println("reacho from 0:"),
+    findall(T, reacho(edge, 0, T), R6),
+    sort(R6, R6s),
+    println(R6s),
+
+    % FSM
+    register_fsm(fsm0),
+    println("fsm_traceo [0,1,0]:"),
+    findall(O, fsm_traceo(fsm0, s0, [0,1,0], O), R7),
+    println(R7),
+
+    % Refinement
+    println("refineo(interval(s(z),s(s(s(z)))), s(s(z))):"),
+    ( refineo(interval(s(z), s(s(s(z)))), s(s(z))) -> println(refined) ; println(no) ),
+
+    println("\n=== COMPLETE ===").

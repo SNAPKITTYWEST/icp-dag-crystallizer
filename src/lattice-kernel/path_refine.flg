@@ -1,0 +1,211 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// CLONE_GATE: path_refine_formulog
+//
+// path_refine.flg — Stratified Formulog Rules + SMT Formulas + FSM Traces
+//
+// Formulog = Datalog + ML-style types + first-class SMT formulas.
+// Compile with the HarvardPL Formulog toolchain:
+//   formulog path_refine.flg
+//
+// Sections:
+//   1. SMT formula types & constructors
+//   2. EDB / base relations
+//   3. Stratified IDB rules
+//   4. Path derivation with SMT guards
+//   5. FSM trace derivation
+//   6. Refinement lattice
+//   7. Full-adder relation
+//   8. mem / list relations
+//   9. Output queries
+
+// ============================================================
+// 1. SMT FORMULA TYPES
+// ============================================================
+
+type smt_formula =
+  | SmtTrue
+  | SmtFalse
+  | SmtVar(string)
+  | SmtNot(smt_formula)
+  | SmtAnd(smt_formula, smt_formula)
+  | SmtOr(smt_formula, smt_formula)
+  | SmtBvSlt(smt_formula, smt_formula)
+
+// Constructors exported as relations
+fun smt_true() : smt_formula = SmtTrue
+fun smt_false() : smt_formula = SmtFalse
+fun smt_var(n : string) : smt_formula = SmtVar(n)
+fun smt_not(a : smt_formula) : smt_formula = SmtNot(a)
+fun smt_and(a : smt_formula, b : smt_formula) : smt_formula = SmtAnd(a, b)
+fun smt_or(a : smt_formula, b : smt_formula) : smt_formula = SmtOr(a, b)
+
+// Stub satisfiability check (returns true unless trivially contradictory)
+fun sat_stub(phi : smt_formula) : bool =
+  match phi with
+  | SmtFalse => false
+  | SmtAnd(SmtNot(SmtVar(x)), SmtVar(y)) => x <> y
+  | SmtAnd(SmtVar(x), SmtNot(SmtVar(y))) => x <> y
+  | _ => true
+
+// ============================================================
+// 2. EDB BASE RELATIONS
+// ============================================================
+
+// edge(rel_id, src, tgt, guard_formula)
+input edge(i32, i32, i32, smt_formula)
+
+// fsm_trans(fsm_id, state, input_bit, next_state, output_bit)
+input fsm_trans(string, string, i32, string, i32)
+
+// abs_val(id, abstract_domain) — for refinement
+// abstract_domain encoded as: "top" | "conc:N" | "interval:LO:HI"
+input abs_val(i32, string)
+
+// ============================================================
+// 3. STRATIFIED IDB RULES
+// ============================================================
+
+// Stratum 0: base reachability (no SMT, no negation)
+output reach(i32, i32, i32)
+reach(R, X, X) :- edge(R, X, _, _).
+reach(R, X, Y) :- edge(R, X, Y, _).
+reach(R, X, Z) :- reach(R, X, Y), edge(R, Y, Z, _).
+
+// Stratum 1: guarded reachability (SAT check on guard)
+output sat_reach(i32, i32, i32)
+sat_reach(R, X, Y) :-
+  edge(R, X, Y, Phi),
+  sat_stub(Phi) = true.
+sat_reach(R, X, Z) :-
+  sat_reach(R, X, Y),
+  edge(R, Y, Z, Phi),
+  sat_stub(Phi) = true.
+
+// Stratum 2: path with accumulated formula (conjunction of guards)
+output path_formula(i32, i32, i32, smt_formula)
+path_formula(R, X, Y, Phi) :-
+  edge(R, X, Y, Phi),
+  sat_stub(Phi) = true.
+path_formula(R, X, Z, smt_and(E, Phi2)) :-
+  edge(R, X, Y, E),
+  sat_stub(E) = true,
+  path_formula(R, Y, Z, Phi2),
+  sat_stub(smt_and(E, Phi2)) = true.
+
+// ============================================================
+// 4. FSM TRACE DERIVATION
+// ============================================================
+
+// fsm_reach(fsm_id, init_state, final_state, steps)
+output fsm_reach(string, string, string, i32)
+fsm_reach(Id, S, S, 0) :- fsm_trans(Id, S, _, _, _).
+fsm_reach(Id, S0, S2, N + 1) :-
+  fsm_trans(Id, S0, _, S1, _),
+  fsm_reach(Id, S1, S2, N),
+  N < 20.
+
+// fsm_output_trace: collect outputs for a given input sequence
+// (Formulog does not have lists in EDB natively; encode as step-indexed)
+// fsm_step(fsm_id, step, from_state, input, to_state, output)
+input fsm_step_query(string, string, i32, i32)  // (id, init, step, input)
+
+output fsm_step_result(string, i32, string, i32)
+fsm_step_result(Id, Step, Nst, Out) :-
+  fsm_step_query(Id, S, Step, Inp),
+  fsm_trans(Id, S, Inp, Nst, Out).
+
+// ============================================================
+// 5. REFINEMENT LATTICE
+// ============================================================
+
+// refines(id, n) — abstract value abs_val(id) refines concrete Nat n
+output refines(i32, i32)
+refines(Id, _N) :-
+  abs_val(Id, "top").
+refines(Id, N) :-
+  abs_val(Id, S),
+  string_starts_with(S, "conc:"),
+  string_to_i32(string_suffix(S, 5)) = N.
+refines(Id, N) :-
+  abs_val(Id, S),
+  string_starts_with(S, "interval:"),
+  // parse "interval:LO:HI"
+  interval_contains(S, N).
+
+// interval_contains is a Formulog built-in stub
+fun interval_contains(spec : string, n : i32) : bool =
+  // Parse "interval:LO:HI" manually; simplified
+  let lo = 0 in   // placeholder; real impl parses the string
+  let hi = 100 in
+  lo <= n && n <= hi
+
+fun string_starts_with(s : string, prefix : string) : bool =
+  string_length(s) >= string_length(prefix)
+
+fun string_suffix(s : string, offset : i32) : string =
+  string_sub(s, offset, string_length(s) - offset)
+
+// ============================================================
+// 6. FULL-ADDER RELATION
+// ============================================================
+
+// Encoded as a ground EDB + join
+// full_add(a, b, cin, s, cout) where all values are 0 or 1
+output full_add_result(i32, i32, i32, i32, i32)
+full_add_result(A, B, Cin, S, Cout) :-
+  member_bit(A), member_bit(B), member_bit(Cin),
+  (A + B + Cin) `mod` 2 = S,
+  (A + B + Cin) `div` 2 = Cout.
+
+output member_bit(i32)
+member_bit(0).
+member_bit(1).
+
+// ============================================================
+// 7. MEM / LIST RELATIONS (step-indexed encoding)
+// ============================================================
+
+// list_elem(list_id, index, value) — EDB list encoding
+input list_elem(i32, i32, i32)
+
+// list_contains(list_id, value)
+output list_contains(i32, i32)
+list_contains(L, V) :- list_elem(L, _, V).
+
+// list_length(list_id, len)
+output list_length(i32, i32)
+list_length(L, N) :-
+  list_elem(L, _, _),
+  agg_count(list_elem(L, _, _)) = N.
+
+// list_append(l1_id, l2_id, out_id)
+// encoded: concatenate two indexed lists into a third
+output list_concat_elem(i32, i32, i32, i32)
+list_concat_elem(L1, L2, Out, I, V) :-
+  list_elem(L1, I, V),
+  list_length(L1, _),
+  Out = L1 * 10000 + L2.
+list_concat_elem(L1, L2, Out, I + N1, V) :-
+  list_elem(L2, I, V),
+  list_length(L1, N1),
+  Out = L1 * 10000 + L2.
+
+// ============================================================
+// 8. OUTPUT QUERIES
+// ============================================================
+
+// All guarded paths in relation 0
+output query_sat_reach_0(i32, i32)
+query_sat_reach_0(X, Y) :- sat_reach(0, X, Y).
+
+// All FSM reachable states from s0 in fsm0
+output query_fsm_reach_fsm0(string, i32)
+query_fsm_reach_fsm0(S, N) :- fsm_reach("fsm0", "s0", S, N).
+
+// Path formulas for relation 0
+output query_path_formula_0(i32, i32, smt_formula)
+query_path_formula_0(X, Y, Phi) :- path_formula(0, X, Y, Phi).
+
+// Full adder check
+output query_full_add(i32, i32, i32, i32, i32)
+query_full_add(A, B, Cin, S, Cout) :- full_add_result(A, B, Cin, S, Cout).
