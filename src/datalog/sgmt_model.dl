@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::datalog::sgmt_model
+//
+// SGMT Datalog model — compiler-00 node/edge schema with provenance
+
+#include "facts.dl"
+
+// ── Extended node with digest ────────────────────────────────────────────────
+
+.type Digest <: symbol
+.type Relation <: symbol
+.type Generation <: number
+
+.decl sgmt_node(id: NodeId, kind: symbol, agent: symbol, digest: Digest)
+.decl sgmt_edge(source: NodeId, target: NodeId, relation: Relation,
+                generation: Generation, provenance: symbol, digest: Digest)
+
+// ── Fact / Rule / Constraint / Proof / Kernel as typed nodes ─────────────────
+
+.decl sgmt_fact(id: NodeId, predicate: symbol, value: symbol)
+.decl sgmt_rule(id: NodeId, head: symbol, body: symbol)
+.decl sgmt_constraint(id: NodeId, domain: symbol, expression: symbol)
+.decl sgmt_proof(id: NodeId, prover: symbol, status: symbol)
+.decl sgmt_kernel(id: NodeId, domain: symbol, digest: Digest)
+
+// ── Reachability on SGMT edges ───────────────────────────────────────────────
+
+.decl sgmt_reachable(x: NodeId, y: NodeId)
+sgmt_reachable(X, Y) :- sgmt_edge(X, Y, _, _, _, _).
+sgmt_reachable(X, Z) :- sgmt_edge(X, Y, _, _, _, _), sgmt_reachable(Y, Z).
+
+.decl sgmt_cycle(x: NodeId)
+sgmt_cycle(X) :- sgmt_reachable(X, X).
+
+// ── Kernel admission ─────────────────────────────────────────────────────────
+
+.decl rejected_kernel(k: NodeId)
+rejected_kernel(K) :- sgmt_kernel(K, _, _), sgmt_cycle(K).
+
+.decl constraints_satisfied(k: NodeId)
+constraints_satisfied(K) :-
+    sgmt_kernel(K, _, _),
+    !rejected_kernel(K).
+
+.decl proofs_satisfied(k: NodeId)
+proofs_satisfied(K) :-
+    sgmt_kernel(K, _, _),
+    sgmt_proof(K, _, "discharged").
+
+.decl admissible_kernel(k: NodeId)
+admissible_kernel(K) :-
+    sgmt_kernel(K, _, _),
+    !rejected_kernel(K),
+    constraints_satisfied(K),
+    proofs_satisfied(K).
+
+// ── Edge provenance validation ───────────────────────────────────────────────
+
+.decl edge_provenance_valid(source: NodeId, target: NodeId)
+edge_provenance_valid(S, T) :-
+    sgmt_edge(S, T, R, G, P, D),
+    R != "",
+    G > 0,
+    P != "",
+    D != "".
+
+.decl broken_provenance(source: NodeId, target: NodeId)
+broken_provenance(S, T) :-
+    sgmt_edge(S, T, _, _, _, _),
+    !edge_provenance_valid(S, T).
+
+// ── Output ───────────────────────────────────────────────────────────────────
+
+.output sgmt_cycle(IO=stdout)
+.output rejected_kernel(IO=stdout)
+.output admissible_kernel(IO=stdout)
+.output broken_provenance(IO=stdout)

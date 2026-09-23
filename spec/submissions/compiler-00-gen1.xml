@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0 -->
+<!-- Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project -->
+<!-- CLONE_GATE: icp-dag-crystallizer::spec::compiler-00 -->
+<!-- compiler-00 agent submission: fail-closed SGMT validation layer -->
+
+<agent-submission
+    agent="compiler-00"
+    family="logic-symbolic"
+    language="SWI-Prolog"
+    generation="1"
+    submission="sub-compiler-00-gen1">
+
+  <objective>
+    Crystallize the fail-closed SGMT validation layer as six SWI-Prolog kernels:
+    reachability closure, cycle rejection, the twelve-condition admission gate,
+    structural digesting, semantic deduplication, and immutable EGG packing,
+    admitted only through XSLT normalization, Prolog/Datalog resolution,
+    constraint discharge, and proof obligations.
+  </objective>
+
+  <facts>
+    <fact predicate="family" arity="2" confidence="1.0">family(logic_symbolic, [prolog, datalog, relational, constraint_logic, functional_logic, formal_logic]).</fact>
+    <fact predicate="language" arity="2" confidence="1.0">language(compiler_00, swi_prolog).</fact>
+    <fact predicate="pipeline_order" arity="1" confidence="1.0">pipeline_order([xml, xslt, relations, prolog_datalog, constraints, proofs, sgmt_dag, crystallization, eggs]).</fact>
+    <fact predicate="rejection_persistence" arity="1" confidence="1.0">rejection_persistence(rejection_node).</fact>
+    <fact predicate="terminal" arity="1" confidence="1.0">terminal(egg).</fact>
+  </facts>
+
+  <rules>
+    <rule id="r_reachable_direct"><head>reachable(X, Y)</head><body>edge(X, Y, _).</body></rule>
+    <rule id="r_reachable_trans"><head>reachable(X, Z)</head><body>edge(X, Y, _), reachable(Y, Z).</body></rule>
+    <rule id="r_cycle"><head>cycle(X)</head><body>reachable(X, X).</body></rule>
+    <rule id="r_rejected_kernel"><head>rejected_kernel(K)</head><body>kernel(K, _, _), cycle(K).</body></rule>
+    <rule id="r_valid_kernel"><head>valid_kernel(K)</head><body>kernel_candidate(_, K, _, _), dependencies_satisfied(K), constraints_satisfied(K), proofs_satisfied(K), acyclic(K), deterministic(K).</body></rule>
+    <rule id="r_admissible"><head>admissible_kernel(K)</head><body>kernel(K, _, _), not rejected_kernel(K), constraints_satisfied(K), proofs_satisfied(K).</body></rule>
+    <rule id="r_crystallize"><head>crystallize(K)</head><body>valid_kernel(K).</body></rule>
+  </rules>
+
+  <constraints>
+    <constraint id="c_acyclicity" domain="sgmt-dag" severity="critical">forall X in Node : not Reachable(X, X).</constraint>
+    <constraint id="c_fail_closed" domain="crystallization" severity="critical">forall K R : failure_mode(K, R) implies a rejection node for R is emitted before any generation step; failure never falls through to generation.</constraint>
+    <constraint id="c_egg_immutable" domain="egg" severity="critical">digest(Egg) is fixed after crystallization; any change to provenance, kernel, dependencies, constraints, proofs, or exports yields digest(Egg2) != digest(Egg1).</constraint>
+    <constraint id="c_determinism" domain="kernel" severity="high">forall K I1 I2 : inputs_equivalent(K, I1, I2) implies output(K, I1) = output(K, I2).</constraint>
+    <constraint id="c_edge_provenance" domain="sgmt-edge" severity="high">every Edge carries source, target, relation, generation, provenance, digest; an edge missing any field is rejected as broken_provenance.</constraint>
+    <constraint id="c_dedup" domain="deduplication" severity="medium">equal structural_digest and equal semantic_signature and equal dependency_signature implies one canonical DAG node.</constraint>
+  </constraints>
+
+  <dependencies>
+    <dependency from="r_reachable_direct" to="k_reachability_closure" relation="DERIVES"/>
+    <dependency from="r_reachable_trans" to="k_reachability_closure" relation="DERIVES"/>
+    <dependency from="r_cycle" to="k_cycle_rejector" relation="DERIVES"/>
+    <dependency from="r_rejected_kernel" to="k_cycle_rejector" relation="DERIVES"/>
+    <dependency from="r_valid_kernel" to="k_fail_closed_gate" relation="DERIVES"/>
+    <dependency from="r_admissible" to="k_fail_closed_gate" relation="DERIVES"/>
+    <dependency from="r_crystallize" to="k_egg_packer" relation="DERIVES"/>
+    <dependency from="k_egg_packer" to="k_structural_digest" relation="DEPENDS_ON"/>
+    <dependency from="k_semantic_dedup" to="k_structural_digest" relation="DEPENDS_ON"/>
+    <dependency from="k_fail_closed_gate" to="k_cycle_rejector" relation="DEPENDS_ON"/>
+    <dependency from="k_fail_closed_gate" to="k_reachability_closure" relation="DEPENDS_ON"/>
+    <dependency from="c_acyclicity" to="k_fail_closed_gate" relation="CONSTRAINS"/>
+    <dependency from="c_fail_closed" to="k_fail_closed_gate" relation="CONSTRAINS"/>
+    <dependency from="c_egg_immutable" to="k_egg_packer" relation="CONSTRAINS"/>
+    <dependency from="c_determinism" to="k_structural_digest" relation="CONSTRAINS"/>
+    <dependency from="c_edge_provenance" to="k_fail_closed_gate" relation="CONSTRAINS"/>
+    <dependency from="c_dedup" to="k_semantic_dedup" relation="CONSTRAINS"/>
+    <dependency from="p_reachability" to="k_reachability_closure" relation="PROVES"/>
+    <dependency from="p_cycle_equivalence" to="k_cycle_rejector" relation="PROVES"/>
+    <dependency from="p_fail_closed_completeness" to="k_fail_closed_gate" relation="PROVES"/>
+    <dependency from="p_digest_determinism" to="k_structural_digest" relation="PROVES"/>
+    <dependency from="p_dedup_congruence" to="k_semantic_dedup" relation="PROVES"/>
+    <dependency from="p_egg_immutability" to="k_egg_packer" relation="PROVES"/>
+  </dependencies>
+
+  <proof-obligations>
+    <obligation id="p_reachability" prover="isabelle">reachable(X,Y) iff finite path X→Y in edge/3; sound and complete by induction on path length.</obligation>
+    <obligation id="p_cycle_equivalence" prover="lean4">cycle_through(N) iff N lies on a cycle of length ≥ 1, equivalent to Reachable(X,X) without reflexive base.</obligation>
+    <obligation id="p_fail_closed_completeness" prover="isabelle">For each of the 12 conditions, if it holds then decide/2 produces reject(K, Condition), deterministic under cut ordering.</obligation>
+    <obligation id="p_digest_determinism" prover="lean4">canonical_kernel(K, C1) ∧ canonical_kernel(K, C2) → C1 = C2; structural_digest(K, D1) ∧ structural_digest(K, D2) → D1 = D2.</obligation>
+    <obligation id="p_dedup_congruence" prover="isabelle">Kernels sharing structural+semantic+dependency signatures converge to one canonical node; non-first members emitted as reject(K, duplicate_semantics).</obligation>
+    <obligation id="p_egg_immutability" prover="lean4">pack_egg/3 output is ground and immutable; any change yields a different digest.</obligation>
+  </proof-obligations>
+
+  <kernel-candidates>
+    <kernel id="k_reachability_closure" domain="graph-reachability" purity="pure"/>
+    <kernel id="k_cycle_rejector" domain="dag-validation" purity="pure"/>
+    <kernel id="k_fail_closed_gate" domain="admission-control" purity="pure"/>
+    <kernel id="k_structural_digest" domain="content-addressing" purity="pure"/>
+    <kernel id="k_semantic_dedup" domain="deduplication" purity="pure"/>
+    <kernel id="k_egg_packer" domain="packaging" purity="pure"/>
+  </kernel-candidates>
+
+</agent-submission>
