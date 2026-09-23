@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::tests::invalid_self_edge
+//
+// Test fixture: I2 violation — self-edge
+
+#include "../src/datalog/kernels.dl"
+
+node("n1", "CLAIM", "verified").
+edge("n1", "n1", "supports").
+
+// Expected: violation("I2-self-edge", "n1", "n1", _)

@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::datalog::facts
+//
+// ICP-DAG v1.0 — Base fact declarations (Soufflé Datalog)
+
+// ── Type declarations ────────────────────────────────────────────────────────
+
+.type NodeId <: symbol
+.type NodeType <: symbol
+.type NodeState <: symbol
+.type EdgeType <: symbol
+
+// ── Base relations ───────────────────────────────────────────────────────────
+
+.decl node(id: NodeId, type: NodeType, state: NodeState)
+.decl edge(from: NodeId, to: NodeId, etype: EdgeType)
+.decl constraint(cid: symbol, domain: symbol, expression: symbol)
+.decl policy(pid: symbol, target: symbol)
+
+// ── Node types (9 canonical) ─────────────────────────────────────────────────
+
+.decl valid_node_type(t: NodeType)
+valid_node_type("EVIDENCE").
+valid_node_type("CLAIM").
+valid_node_type("CONSTRAINT").
+valid_node_type("PROOF").
+valid_node_type("DECISION").
+valid_node_type("AUTHORIZATION").
+valid_node_type("EXECUTION").
+valid_node_type("AUDIT").
+valid_node_type("POLICY").
+
+// ── Valid states ─────────────────────────────────────────────────────────────
+
+.decl valid_state(s: NodeState)
+valid_state("unknown").
+valid_state("proposed").
+valid_state("verified").
+valid_state("proven").
+valid_state("authorized").
+valid_state("pending").
+valid_state("executed").
+valid_state("contradicted").
+valid_state("active").
+valid_state("observed").
+
+// ── Valid edge types ─────────────────────────────────────────────────────────
+
+.decl valid_edge_type(e: EdgeType)
+valid_edge_type("supports").
+valid_edge_type("proven-by").
+valid_edge_type("decides").
+valid_edge_type("executes").
+valid_edge_type("enforces").
+valid_edge_type("satisfies").
+
+// ── Edge type schema (source_type, target_type) ──────────────────────────────
+
+.decl edge_schema(etype: EdgeType, src_type: NodeType, tgt_type: NodeType)
+edge_schema("supports",  "EVIDENCE",   "CLAIM").
+edge_schema("proven-by", "CLAIM",      "PROOF").
+edge_schema("decides",   "PROOF",      "DECISION").
+edge_schema("executes",  "DECISION",   "EXECUTION").
+edge_schema("enforces",  "POLICY",     "CONSTRAINT").
+edge_schema("satisfies", "CONSTRAINT", "PROOF").

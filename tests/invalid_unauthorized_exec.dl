@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::tests::invalid_unauthorized_exec
+//
+// Test fixture: I5b violation — execution from non-authorized decision
+
+#include "../src/datalog/kernels.dl"
+
+node("d1", "DECISION",  "proposed").
+node("e1", "EXECUTION", "pending").
+
+edge("d1", "e1", "executes").
+
+// Expected: violation("I5-unauthorized-execution", "e1", "d1", _)

@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::datalog::rules
+//
+// ICP-DAG v1.0 — Derivation rules (Soufflé Datalog)
+
+#include "facts.dl"
+
+// ── R1: Proven — a claim is proven if a proof edge exists ────────────────────
+
+.decl proven(claim: NodeId)
+proven(C) :-
+    node(P, "PROOF", "proven"),
+    edge(C, P, "proven-by").
+
+// ── R2: Authorized — decision authorized iff backing claim is proven ─────────
+
+.decl authorized(decision: NodeId)
+authorized(D) :-
+    node(D, "DECISION", "authorized"),
+    node(C, "CLAIM", "verified"),
+    edge(C, D, "decides"),
+    proven(C).
+
+// ── R3: Can execute — execution requires authorized decision ─────────────────
+
+.decl can_execute(execution: NodeId)
+can_execute(E) :-
+    node(E, "EXECUTION", "pending"),
+    node(D, "DECISION", "authorized"),
+    edge(D, E, "executes").
+
+// ── R4: Reachability (transitive closure) ────────────────────────────────────
+
+.decl reachable(x: NodeId, y: NodeId)
+reachable(X, Y) :- edge(X, Y, _).
+reachable(X, Z) :- edge(X, Y, _), reachable(Y, Z).
+
+// ── R5: Cycle detection ──────────────────────────────────────────────────────
+
+.decl cycle(x: NodeId)
+cycle(X) :- reachable(X, X).
+
+// ── R6: Edge type validation ─────────────────────────────────────────────────
+
+.decl edge_type_valid(from: NodeId, to: NodeId, etype: EdgeType)
+edge_type_valid(F, T, E) :-
+    edge(F, T, E),
+    node(F, FType, _),
+    node(T, TType, _),
+    edge_schema(E, FType, TType).
+
+// ── R7: Constraint satisfaction ──────────────────────────────────────────────
+
+.decl constraint_satisfied(cid: symbol)
+constraint_satisfied(CID) :-
+    constraint(CID, _, _),
+    !constraint_violated(CID).
+
+.decl constraint_violated(cid: symbol)
+// Populated by invariant checks below
+
+// ── R8: Policy active ────────────────────────────────────────────────────────
+
+.decl policy_active(pid: symbol)
+policy_active(PID) :-
+    policy(PID, _),
+    node(_, "POLICY", "active").

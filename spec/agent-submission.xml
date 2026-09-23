@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0 -->
+<!-- Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project -->
+<!-- CLONE_GATE: icp-dag-crystallizer::spec::submission -->
+<!-- Original agent submission preserved verbatim -->
+
+<agent-submission
+    agent="ICP-DAG-CRYSTALLIZER"
+    family="logic-symbolic"
+    language="Datalog"
+    generation="1"
+    submission="sgmt-001">
+
+  <objective>
+Formalize ICP-DAG v1.0 Integrity Constraint Protocol as deterministic SGMT nodes.
+Crystallize 10 governance invariants into Datalog/Prolog relations.
+Emit kernel candidates for node creation, edge validation, and constraint verification.
+  </objective>
+
+  <inputs>
+    <input id="icp-mumps" type="source" digest="abc123def456">
+ICP-DAG.m — MUMPS governance kernel (258 lines)
+    </input>
+    <input id="icp-asp" type="source" digest="def456ghi789">
+ICP-DAG.lp — Answer Set Programming constraints (39 lines)
+    </input>
+  </inputs>
+
+  <facts>
+    <fact predicate="node_type" arity="1" confidence="1.0">
+EVIDENCE, CLAIM, CONSTRAINT, PROOF, DECISION, AUTHORIZATION, EXECUTION, AUDIT, POLICY
+    </fact>
+    <fact predicate="initial_state" arity="2" confidence="1.0">
+node(claim, unknown) | node(proof, proven) | node(decision, proposed) | node(execution, pending)
+    </fact>
+    <fact predicate="dag_structure" arity="3" confidence="1.0">
+edge_type(supports, evidence, claim) | edge_type(proven_by, claim, proof) | edge_type(decides, proof, decision) | edge_type(executes, decision, execution)
+    </fact>
+    <fact predicate="governance_invariant" arity="2" confidence="1.0">
+I1: every_edge_has_existing_endpoints | I2: no_self_edges | I3: unknown_cannot_authorize | I4: contradicted_cannot_authorize | I5: execution_needs_authorized_decision | I6: proof_references_claim | I7: policy_references_constraint | I8: constraint_failure_propagates | I9: governance_failure_prevents_execution | I10: asp_unsat_halts_dag
+    </fact>
+  </facts>
+
+  <rules>
+    <rule id="r-proven">
+      <head>proven(C)</head>
+      <body>node(P, proof, proven), edge(C, P, "proven-by")</body>
+    </rule>
+    <rule id="r-authorized">
+      <head>authorized(D)</head>
+      <body>node(D, decision, authorized), node(C, claim, verified), edge(C, D, "decides"), proven(C)</body>
+    </rule>
+    <rule id="r-can-execute">
+      <head>can_execute(E)</head>
+      <body>node(E, execution, pending), node(D, decision, authorized), edge(D, E, "executes")</body>
+    </rule>
+    <rule id="r-reachable">
+      <head>reachable(X, Y)</head>
+      <body>edge(X, Y, _)</body>
+    </rule>
+    <rule id="r-reachable-trans">
+      <head>reachable(X, Z)</head>
+      <body>edge(X, Y, _), reachable(Y, Z)</body>
+    </rule>
+    <rule id="r-cycle">
+      <head>cycle(X)</head>
+      <body>reachable(X, X)</body>
+    </rule>
+  </rules>
+
+  <constraints>
+    <constraint id="c-i1" domain="edges" severity="FATAL">
+:- edge(A, B, _), not node(A, _, _).
+:- edge(A, B, _), not node(B, _, _).
+    </constraint>
+    <constraint id="c-i2" domain="edges" severity="FATAL">
+:- node(N, _, _), edge(N, N, _).
+    </constraint>
+    <constraint id="c-i3" domain="claims" severity="FATAL">
+:- node(C, claim, unknown), node(D, decision, _), edge(C, D, decides).
+    </constraint>
+    <constraint id="c-i4" domain="claims" severity="FATAL">
+:- node(C, claim, contradicted), node(D, decision, _), edge(C, D, decides).
+    </constraint>
+    <constraint id="c-i5" domain="decisions" severity="FATAL">
+:- node(D, decision, authorized), node(C, claim, _), edge(C, D, decides), not proven(C).
+    </constraint>
+    <constraint id="c-i5b" domain="execution" severity="FATAL">
+:- node(E, execution, _), edge(D, E, executes), node(D, decision, S), S != authorized.
+    </constraint>
+    <constraint id="c-i9" domain="claims" severity="FATAL">
+:- node(C, claim, unknown), node(C, claim, verified).
+    </constraint>
+    <constraint id="c-acyclic" domain="dag" severity="FATAL">
+:- cycle(X).
+    </constraint>
+  </constraints>
+
+  <dependencies>
+    <dependency from="CLAIM" to="PROOF" relation="PROVEN-BY"/>
+    <dependency from="PROOF" to="DECISION" relation="JUSTIFIES"/>
+    <dependency from="DECISION" to="EXECUTION" relation="AUTHORIZES"/>
+    <dependency from="POLICY" to="CONSTRAINT" relation="ENFORCES"/>
+    <dependency from="EVIDENCE" to="CLAIM" relation="SUPPORTS"/>
+    <dependency from="CONSTRAINT" to="PROOF" relation="SATISFIES"/>
+  </dependencies>
+
+  <proof-obligations>
+    <obligation id="po-i1" prover="Datalog">
+For all edges (A, B), nodes A and B must exist in the DAG node set.
+    </obligation>
+    <obligation id="po-i2" prover="Datalog">
+No node may have an edge to itself (acyclic property).
+    </obligation>
+    <obligation id="po-i5" prover="Datalog">
+If a decision is authorized, all claims supporting it must be proven.
+    </obligation>
+    <obligation id="po-i9" prover="Datalog">
+No claim may simultaneously hold both unknown and verified states.
+    </obligation>
+    <obligation id="po-acyclic" prover="Datalog">
+The DAG must be acyclic. Reachability from any node cannot return to itself.
+    </obligation>
+  </proof-obligations>
+
+  <kernel-candidates>
+    <kernel id="k-node-create" domain="node-management" purity="pure"/>
+    <kernel id="k-edge-validate" domain="dag-integrity" purity="pure"/>
+    <kernel id="k-constraint-check" domain="constraint-enforcement" purity="pure"/>
+    <kernel id="k-dag-check" domain="governance-verification" purity="pure"/>
+    <kernel id="k-governance-enforce" domain="policy-execution" purity="side-effect"/>
+    <kernel id="k-seal-dag" domain="finalization" purity="side-effect"/>
+  </kernel-candidates>
+
+</agent-submission>

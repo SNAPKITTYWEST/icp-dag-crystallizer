@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::tests::invalid_cycle
+//
+// Test fixture: I10 violation — cycle
+
+#include "../src/datalog/kernels.dl"
+
+node("a", "CLAIM",    "verified").
+node("b", "PROOF",    "proven").
+node("c", "DECISION", "proposed").
+
+edge("a", "b", "proven-by").
+edge("b", "c", "decides").
+edge("c", "a", "supports").
+
+// Expected: violation("I10-cycle-detected", _, _, _)

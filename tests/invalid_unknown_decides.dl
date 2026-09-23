@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::tests::invalid_unknown_decides
+//
+// Test fixture: I3 violation — unknown claim feeds decision
+
+#include "../src/datalog/kernels.dl"
+
+node("c1", "CLAIM",    "unknown").
+node("d1", "DECISION", "proposed").
+
+edge("c1", "d1", "decides").
+
+// Expected: violation("I3-unknown-authorizes", "c1", "d1", _)

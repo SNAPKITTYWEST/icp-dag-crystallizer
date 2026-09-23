@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::tests::valid_dag
+//
+// Test fixture: a fully valid ICP-DAG (zero violations expected)
+
+#include "../src/datalog/kernels.dl"
+
+// ── Valid DAG: evidence → claim → proof → decision → execution ───────────────
+
+node("ev1",   "EVIDENCE",   "observed").
+node("c1",    "CLAIM",      "verified").
+node("p1",    "PROOF",      "proven").
+node("d1",    "DECISION",   "authorized").
+node("e1",    "EXECUTION",  "pending").
+node("pol1",  "POLICY",     "active").
+node("con1",  "CONSTRAINT", "active").
+
+edge("ev1",  "c1",   "supports").
+edge("c1",   "p1",   "proven-by").
+edge("p1",   "d1",   "decides").
+edge("d1",   "e1",   "executes").
+edge("pol1", "con1", "enforces").
+edge("con1", "p1",   "satisfies").
+
+// Expected: dag_status("VALID"), seal_status("SEALED", 7, 6, 0)

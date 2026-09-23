@@ -1,0 +1,102 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::datalog::invariants
+//
+// ICP-DAG v1.0 — 10 Governance Invariants (Soufflé Datalog)
+// All invariants emit violations; an empty violation set = DAG valid.
+
+#include "rules.dl"
+
+// ── Violation relation (output) ──────────────────────────────────────────────
+
+.decl violation(invariant: symbol, node_a: NodeId, node_b: NodeId, detail: symbol)
+.output violation(IO=stdout)
+
+// ── I1: Every edge has existing endpoints ────────────────────────────────────
+
+violation("I1-dangling-source", A, B, "source node missing") :-
+    edge(A, B, _), !node(A, _, _).
+
+violation("I1-dangling-target", A, B, "target node missing") :-
+    edge(A, B, _), !node(B, _, _).
+
+// ── I2: No self-edges ────────────────────────────────────────────────────────
+
+violation("I2-self-edge", N, N, "node has edge to itself") :-
+    node(N, _, _), edge(N, N, _).
+
+// ── I3: Unknown claims cannot authorize decisions ────────────────────────────
+
+violation("I3-unknown-authorizes", C, D, "unknown claim feeds decision") :-
+    node(C, "CLAIM", "unknown"),
+    node(D, "DECISION", _),
+    edge(C, D, "decides").
+
+// ── I4: Contradicted claims cannot authorize decisions ───────────────────────
+
+violation("I4-contradicted-authorizes", C, D, "contradicted claim feeds decision") :-
+    node(C, "CLAIM", "contradicted"),
+    node(D, "DECISION", _),
+    edge(C, D, "decides").
+
+// ── I5: Execution needs authorized decision ──────────────────────────────────
+
+violation("I5-unproven-authorization", D, C, "decision authorized without proven claim") :-
+    node(D, "DECISION", "authorized"),
+    node(C, "CLAIM", _),
+    edge(C, D, "decides"),
+    !proven(C).
+
+violation("I5-unauthorized-execution", E, D, "execution from non-authorized decision") :-
+    node(E, "EXECUTION", _),
+    edge(D, E, "executes"),
+    node(D, "DECISION", S),
+    S != "authorized".
+
+// ── I6: Proof must reference a claim ─────────────────────────────────────────
+
+violation("I6-orphan-proof", P, P, "proof has no backing claim") :-
+    node(P, "PROOF", _),
+    !edge(_, P, "proven-by").
+
+// ── I7: Policy must reference a constraint ───────────────────────────────────
+
+violation("I7-orphan-policy", PO, PO, "policy enforces no constraint") :-
+    node(PO, "POLICY", _),
+    !edge(PO, _, "enforces").
+
+// ── I8: Constraint failure propagates ────────────────────────────────────────
+
+.decl constraint_failure_propagates(cid: symbol, proof: NodeId)
+constraint_failure_propagates(CID, P) :-
+    constraint(CID, _, _),
+    constraint_violated(CID),
+    node(CN, "CONSTRAINT", _),
+    edge(CN, P, "satisfies").
+
+violation("I8-constraint-propagation", P, P, "constraint failure reaches proof") :-
+    constraint_failure_propagates(_, P).
+
+// ── I9: Governance failure prevents execution ────────────────────────────────
+
+.decl governance_failed()
+governance_failed() :- violation(_, _, _, _).
+
+violation("I9-governance-blocks-execution", E, E, "execution while governance failed") :-
+    governance_failed(),
+    node(E, "EXECUTION", "executed").
+
+// ── I10: Cycle detection (ASP unsat equivalent) ──────────────────────────────
+
+violation("I10-cycle-detected", X, X, "DAG contains cycle") :-
+    cycle(X).
+
+// ── Summary: DAG validity ────────────────────────────────────────────────────
+
+.decl dag_valid()
+dag_valid() :- !governance_failed().
+
+.decl dag_status(status: symbol)
+dag_status("VALID") :- dag_valid().
+dag_status("INVALID") :- governance_failed().
+.output dag_status(IO=stdout)

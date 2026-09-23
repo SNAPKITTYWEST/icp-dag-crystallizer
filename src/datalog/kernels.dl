@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+// Copyright (C) 2026 SNAPKITTYWEST / Sovereign Kernel Project
+// CLONE_GATE: icp-dag-crystallizer::datalog::kernels
+//
+// ICP-DAG v1.0 — 6 Kernel Candidates (Soufflé Datalog)
+// Deterministic SGMT node operations.
+
+#include "invariants.dl"
+
+// ── K1: Node creation (pure) ─────────────────────────────────────────────────
+
+.decl node_create_valid(id: NodeId, type: NodeType, state: NodeState)
+node_create_valid(ID, Type, State) :-
+    node(ID, Type, State),
+    valid_node_type(Type),
+    valid_state(State).
+
+// ── K2: Edge validation (pure) ───────────────────────────────────────────────
+
+.decl edge_create_valid(from: NodeId, to: NodeId, etype: EdgeType)
+edge_create_valid(F, T, E) :-
+    edge(F, T, E),
+    node(F, _, _),
+    node(T, _, _),
+    F != T,
+    !cycle_after_add(F, T),
+    valid_edge_type(E),
+    edge_type_valid(F, T, E).
+
+.decl cycle_after_add(from: NodeId, to: NodeId)
+cycle_after_add(F, T) :- reachable(T, F).
+
+// ── K3: Constraint check (pure) ─────────────────────────────────────────────
+
+.decl all_constraints_satisfied()
+all_constraints_satisfied() :-
+    !constraint_violated(_).
+
+// ── K4: DAG integrity check (pure) ──────────────────────────────────────────
+
+.decl dag_integrity_check(result: symbol)
+dag_integrity_check("PASS") :-
+    dag_valid(),
+    all_constraints_satisfied(),
+    !violation("I1-dangling-source", _, _, _),
+    !violation("I1-dangling-target", _, _, _),
+    !violation("I2-self-edge", _, _, _),
+    !violation("I10-cycle-detected", _, _, _).
+
+dag_integrity_check("FAIL") :-
+    !dag_valid().
+
+.output dag_integrity_check(IO=stdout)
+
+// ── K5: Governance enforcement (side-effect) ─────────────────────────────────
+
+.decl governance_ready()
+governance_ready() :-
+    dag_valid(),
+    all_constraints_satisfied().
+
+.decl governance_status(status: symbol)
+governance_status("GOVERNING") :- governance_ready().
+governance_status("BLOCKED") :- !governance_ready().
+.output governance_status(IO=stdout)
+
+// ── K6: Seal (side-effect) ───────────────────────────────────────────────────
+
+.decl seal_ready()
+seal_ready() :- governance_ready().
+
+.decl node_count(n: number)
+node_count(N) :- N = count : node(_, _, _).
+
+.decl edge_count(n: number)
+edge_count(N) :- N = count : edge(_, _, _).
+
+.decl violation_count(n: number)
+violation_count(N) :- N = count : violation(_, _, _, _).
+
+.decl seal_status(status: symbol, nodes: number, edges: number, violations: number)
+seal_status("SEALED", NC, EC, 0) :-
+    seal_ready(), node_count(NC), edge_count(EC).
+seal_status("UNSEALED", NC, EC, VC) :-
+    !seal_ready(), node_count(NC), edge_count(EC), violation_count(VC).
+.output seal_status(IO=stdout)
