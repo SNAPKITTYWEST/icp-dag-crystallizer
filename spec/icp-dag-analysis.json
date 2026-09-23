@@ -1,0 +1,242 @@
+{
+  "validation_metadata": {
+    "protocol": "ICP-DAG Governance Protocol",
+    "version": "1.0",
+    "timestamp": "2026-09-22T00:00:00Z",
+    "validation_framework": "Haiku-Integrity-Constraint-Protocol",
+    "model": "claude-haiku-4.5"
+  },
+  "protocol_rules": {
+    "I2": {
+      "name": "DAG Acyclicity",
+      "description": "Agent dependency graph must be acyclic",
+      "validation_type": "topological_ordering",
+      "severity": "critical"
+    },
+    "I3": {
+      "name": "Unknown Claims Cannot Authorize",
+      "description": "Claims in state Unknown cannot be used in decision authorization chains",
+      "validation_type": "claim_state_check",
+      "severity": "critical"
+    },
+    "I4": {
+      "name": "Contradicted Claims Cannot Authorize",
+      "description": "Claims in state Contradicted cannot support decisions; conflicting proofs invalidate authorization",
+      "validation_type": "conflict_detection",
+      "severity": "critical"
+    },
+    "I5": {
+      "name": "Execution Needs Authorized Decision",
+      "description": "Execution must be traceable to authorized decision → valid proof → verified claim chain",
+      "validation_type": "chain_verification",
+      "severity": "critical"
+    },
+    "I9": {
+      "name": "Claim State Consistency",
+      "description": "No claim can simultaneously be Unknown and Verified, or Verified and Contradicted",
+      "validation_type": "state_consistency",
+      "severity": "critical"
+    },
+    "I10": {
+      "name": "Reachability Acyclicity",
+      "description": "Transitive dependencies (via message chains) must be acyclic",
+      "validation_type": "transitive_acyclicity",
+      "severity": "critical"
+    }
+  },
+  "validation_structure": {
+    "claim_states": [
+      "Unknown",
+      "Verified",
+      "Contradicted",
+      "Pending"
+    ],
+    "entity_types": [
+      "Claim",
+      "Proof",
+      "Decision",
+      "Execution",
+      "AgentMessage"
+    ],
+    "validation_chain": [
+      "claim_registration",
+      "proof_registration",
+      "decision_registration",
+      "execution_registration",
+      "message_dependency_analysis",
+      "acyclicity_check",
+      "state_consistency_check",
+      "execution_chain_verification",
+      "violation_aggregation"
+    ]
+  },
+  "golog_agent_communication_model": {
+    "message_semantics": {
+      "sender_to_receiver": "Agent A claims property P to Agent B",
+      "claim_encoding": "AgentMessage.claim = Claim with content property",
+      "response_type": "Proof encodes verification of claim",
+      "consensus_decision": "Decision aggregates proofs from multiple agents"
+    },
+    "message_dependency_graph": {
+      "nodes": "Agents (vertices)",
+      "edges": "Agent communication (directed edges)",
+      "properties": [
+        "Source: message_id",
+        "Target: depends_on field",
+        "Weight: message timestamp order",
+        "Metadata: proof chain length"
+      ]
+    },
+    "proof_semantics": {
+      "proof_chain": "Ordered list of claim IDs supporting a proof",
+      "verifier_agent": "Agent that provided proof (authorization source)",
+      "is_valid": "Boolean indicating proof passes verification logic"
+    },
+    "decision_semantics": {
+      "supporting_proofs": "Proofs that authorize the decision",
+      "conflicting_proofs": "Proofs that contradict the decision",
+      "authorized": "Iff supporting_proofs are all valid AND no conflicting proofs exist",
+      "consensus_model": "Decision authorized when supporting > conflicting AND all supporting are valid"
+    }
+  },
+  "violation_categories": {
+    "I3_VIOLATION": {
+      "rule": "I3",
+      "category": "Unknown Claim Authorization",
+      "remediation": "Remove unknown claims from proof chains; re-verify with known-state claims only"
+    },
+    "I4_VIOLATION": {
+      "rule": "I4",
+      "category": "Contradicted Claim Usage",
+      "remediation": "Resolve contradiction; remove contradicted claims from supporting proof set"
+    },
+    "I5_VIOLATION": {
+      "rule": "I5",
+      "category": "Unauthorized Execution",
+      "remediation": "Trace decision authorization chain; verify decision is authorized before execution"
+    },
+    "I9_VIOLATION": {
+      "rule": "I9",
+      "category": "State Inconsistency",
+      "remediation": "Ensure each claim has exactly one state; implement state machine transitions"
+    },
+    "I2_I10_VIOLATION": {
+      "rule": "I2, I10",
+      "category": "Cyclic Dependency",
+      "remediation": "Reorder agent communication; break cycles by introducing intermediate decision agents"
+    }
+  },
+  "sample_valid_scenario": {
+    "description": "Governance decision with proper authorization chain",
+    "scenario": {
+      "step_1_claim": {
+        "id": "claim_policy_approved",
+        "state": "Verified",
+        "agent": "policy_board",
+        "content": "Policy XYZ has been reviewed and approved"
+      },
+      "step_2_proof": {
+        "claim_id": "proof_policy_1",
+        "proof_chain": ["claim_policy_approved"],
+        "verifier_agent": "compliance_agent",
+        "is_valid": true
+      },
+      "step_3_decision": {
+        "decision_id": "authorize_deployment",
+        "supporting_proofs": ["proof_policy_1"],
+        "conflicting_proofs": [],
+        "authorized": true
+      },
+      "step_4_execution": {
+        "exec_id": "deploy_policy_xyz",
+        "decision_id": "authorize_deployment",
+        "executed": true
+      },
+      "verification_chain": "claim_policy_approved (Verified) -> proof_policy_1 (valid) -> authorize_deployment (authorized) -> deploy_policy_xyz (executed)"
+    }
+  },
+  "sample_violation_scenario": {
+    "description": "Multiple protocol violations",
+    "violations": [
+      {
+        "id": "violation_1",
+        "rule": "I3",
+        "type": "Unknown claim in authorization chain",
+        "claim_id": "claim_future_event",
+        "state": "Unknown",
+        "decision_id": "decision_depends_on_unknown",
+        "issue": "Decision authorized using claim that hasn't been verified yet"
+      },
+      {
+        "id": "violation_2",
+        "rule": "I4",
+        "type": "Contradicted claim usage",
+        "claim_id": "claim_budget_sufficient",
+        "conflicting_claim": "claim_budget_exceeded",
+        "decision_id": "decision_allocate_funds",
+        "issue": "Supporting proof uses contradicted claim; conflicting proof also present"
+      },
+      {
+        "id": "violation_3",
+        "rule": "I2",
+        "type": "Cyclic agent dependency",
+        "cycle": ["agent_a", "agent_b", "agent_c", "agent_a"],
+        "issue": "Agent communication forms cycle; violates DAG requirement"
+      }
+    ]
+  },
+  "dag_analysis_output": {
+    "structure": {
+      "nodes_count": 0,
+      "edges_count": 0,
+      "is_acyclic": true,
+      "cycles": []
+    },
+    "topological_sort": [],
+    "reachability": {
+      "transitive_closure": {},
+      "strongly_connected_components": []
+    }
+  },
+  "execution_chain_templates": {
+    "valid_chain": {
+      "execution_id": "exec_N",
+      "decision_id": "decision_N",
+      "proofs": ["proof_1", "proof_2"],
+      "claims": ["claim_1", "claim_2"],
+      "is_valid": true,
+      "chain_length": 3
+    },
+    "invalid_chain": {
+      "execution_id": "exec_M",
+      "decision_id": "decision_M",
+      "proofs": ["proof_invalid"],
+      "claims": ["claim_unknown"],
+      "is_valid": false,
+      "failure_reason": "Unknown claim in chain"
+    }
+  },
+  "validation_report_template": {
+    "summary": {
+      "is_valid": true,
+      "total_violations": 0,
+      "violation_by_rule": {}
+    },
+    "claim_analysis": {
+      "total_claims": 0,
+      "verified_claims": 0,
+      "unknown_claims": 0,
+      "contradicted_claims": 0,
+      "pending_claims": 0,
+      "state_inconsistencies": []
+    },
+    "dag_structure": {
+      "nodes": [],
+      "edges": [],
+      "is_acyclic": true,
+      "cycles": []
+    },
+    "execution_chains": [],
+    "violations": []
+  }
+}
